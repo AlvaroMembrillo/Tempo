@@ -218,3 +218,70 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# ==========================================
+# Claude Code y Asistentes IA
+# ==========================================
+.claude/
+.claude.json
+claude.json
+*.claude*
+.prompt/
+.ai/
+
+# ==========================================
+# Angular & Node.js
+# ==========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Compilación y builds de Angular
+/dist/
+/tmp/
+/out-tsc/
+.angular/cache/
+.angular/
+
+# Tests y cobertura en frontend
+/coverage/
+/.nyc_output/
+
+# ==========================================
+# Secretos y Entornos (Frontend / Comunes)
+# ==========================================
+# Variables de entorno adicionales
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# Entornos de Angular con posibles credenciales locales
+src/environments/environment.prod.ts
+src/environments/environment.local.ts
+frontend/src/environments/environment.prod.ts
+frontend/src/environments/environment.local.ts
+
+# ==========================================
+# IDEs y Editores
+# ==========================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+
+# ==========================================
+# Archivos de Sistema Operativo
+# ==========================================
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
