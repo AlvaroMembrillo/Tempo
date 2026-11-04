@@ -8,8 +8,17 @@ import { EventDialog } from './event-dialog';
 import { AvailabilityDialog } from './availability-dialog';
 import { TimeBlockStore } from './time-block-store';
 import { dayAvailability, formatHours, sumAvailability } from './availability';
-import { CalendarEvent, CalendarView, EVENT_COLORS } from './models';
-import { addDays, addMonths, isSameDay, monthGrid, startOfDay, weekDays } from './date-utils';
+import { holidayOn } from './holidays';
+import { CalendarEvent, CalendarView, EVENT_COLORS, TimeBlock } from './models';
+import {
+  addDays,
+  addMonths,
+  isSameDay,
+  monthGrid,
+  startOfDay,
+  toDateInput,
+  weekDays,
+} from './date-utils';
 
 interface Editing {
   event: CalendarEvent;
@@ -121,6 +130,7 @@ const shortMonth = new Intl.DateTimeFormat('es-ES', { month: 'short' });
                 type="button"
                 class="mx-auto flex size-7 items-center justify-center rounded-full"
                 [class]="miniDayClass(d)"
+                [title]="holidayName(d)"
                 (click)="cursor.set(d); miniCursor.set(d)"
               >
                 {{ d.getDate() }}
@@ -212,6 +222,7 @@ const shortMonth = new Intl.DateTimeFormat('es-ES', { month: 'short' });
             [events]="events()"
             [blocks]="blocks()"
             [compact]="timeBlocks.compact()"
+            (blockClick)="blockAction.set($event)"
             (slotClick)="create($event)"
             (eventClick)="edit($event)"
           />
@@ -226,6 +237,51 @@ const shortMonth = new Intl.DateTimeFormat('es-ES', { month: 'short' });
         }
       </main>
     </div>
+
+    @if (blockAction(); as ba) {
+      <div
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 dark:bg-black/60"
+        (click)="blockAction.set(null)"
+        (document:keydown.escape)="blockAction.set(null)"
+      >
+        <div
+          class="flex w-full max-w-sm flex-col gap-4 rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900"
+          role="dialog"
+          aria-labelledby="block-action-title"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="flex items-start gap-3">
+            <span class="mt-1.5 size-3 shrink-0 rounded-full" [style.background-color]="ba.block.color"></span>
+            <div>
+              <h2 id="block-action-title" class="text-lg font-medium">{{ ba.block.label || 'Sin nombre' }}</h2>
+              <p class="text-sm text-gray-500 first-letter:uppercase dark:text-gray-400">
+                {{ ba.day | date: 'EEEE d MMMM y' }} · {{ ba.block.start }}–{{ ba.block.end }}
+              </p>
+            </div>
+          </div>
+          <p class="text-sm text-gray-600 dark:text-gray-300">
+            ¿Este día no tienes «{{ ba.block.label || 'esta franja' }}» (festivo, vacaciones...)?
+            Puedes quitarla solo para este día; el resto de días y semanas no cambian.
+          </p>
+          <div class="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+              (click)="blockAction.set(null); showAvailability.set(true)"
+            >
+              Editar franjas
+            </button>
+            <button
+              type="button"
+              class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              (click)="skipBlockDay(ba.block, ba.day)"
+            >
+              Quitar solo este día
+            </button>
+          </div>
+        </div>
+      </div>
+    }
 
     @if (showAvailability()) {
       <app-availability-dialog (closed)="showAvailability.set(false)" />
@@ -255,6 +311,7 @@ export class CalendarPage {
   protected readonly timeBlocks = inject(TimeBlockStore);
   protected readonly blocks = this.timeBlocks.blocks;
   protected readonly showAvailability = signal(false);
+  protected readonly blockAction = signal<{ block: TimeBlock; day: Date } | null>(null);
 
   /** Disponibilidad de la semana que contiene la fecha seleccionada. */
   protected readonly week = computed(() =>
@@ -291,6 +348,11 @@ export class CalendarPage {
   protected readonly miniTitle = computed(() => monthYear.format(this.miniCursor()));
   protected readonly miniDays = computed(() => monthGrid(this.miniCursor()));
 
+  protected skipBlockDay(block: TimeBlock, day: Date): void {
+    this.timeBlocks.skipDay(block.id, toDateInput(day));
+    this.blockAction.set(null);
+  }
+
   protected goToday(): void {
     const today = startOfDay(new Date());
     this.cursor.set(today);
@@ -308,10 +370,15 @@ export class CalendarPage {
     this.miniCursor.update((d) => addMonths(d, dir));
   }
 
+  protected holidayName(d: Date): string {
+    return holidayOn(d)?.name ?? '';
+  }
+
   protected miniDayClass(d: Date): string {
     if (isSameDay(d, new Date())) return 'bg-blue-600 text-white';
     if (isSameDay(d, this.cursor())) return 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200';
     if (d.getMonth() !== this.miniCursor().getMonth()) return 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800';
+    if (holidayOn(d)) return 'font-semibold text-rose-600 dark:text-rose-400 hover:bg-gray-100 dark:hover:bg-gray-800';
     return 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800';
   }
 

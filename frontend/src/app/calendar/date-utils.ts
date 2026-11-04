@@ -1,4 +1,5 @@
 import { CalendarEvent, TimeBlock } from './models';
+import { holidayOn } from './holidays';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -102,18 +103,47 @@ export function formatDuration(minutes: number): string {
  */
 export function blockSegments(block: TimeBlock, day: Date): [number, number][] {
   if (!block.enabled) return [];
-  const dow = (day.getDay() + 6) % 7;
-  const prevDow = (dow + 6) % 7;
+  const prevDay = addDays(day, -1);
   const s = minutesOf(block.start);
   const e = minutesOf(block.end);
   const out: [number, number][] = [];
   if (e > s) {
-    if (block.days.includes(dow)) out.push([s, e]);
+    if (blockStartsOn(block, day)) out.push([s, e]);
   } else {
-    if (block.days.includes(dow)) out.push([s, DAY_MINUTES]);
-    if (block.days.includes(prevDow) && e > 0) out.push([0, e]);
+    if (blockStartsOn(block, day)) out.push([s, DAY_MINUTES]);
+    if (blockStartsOn(block, prevDay) && e > 0) out.push([0, e]);
   }
   return out;
+}
+
+/** ¿Empieza la franja ese día? (según los días de la semana, las excepciones y los festivos) */
+export function blockStartsOn(block: TimeBlock, day: Date): boolean {
+  const dow = (day.getDay() + 6) % 7;
+  if (!block.days.includes(dow)) return false;
+  if (block.exceptions?.includes(toDateInput(day))) return false;
+  if (holidayOn(day) && !keepsOnHolidays(block)) return false;
+  return true;
+}
+
+const SLEEP_LABEL = /dorm|sue[ñn]o|siesta|descanso|sleep/i;
+
+/**
+ * ¿Se mantiene la franja en días festivos? Si el usuario no lo ha indicado,
+ * se mantienen solo las de sueño (se reconocen por el nombre).
+ */
+export function keepsOnHolidays(block: TimeBlock): boolean {
+  return block.keepOnHolidays ?? SLEEP_LABEL.test(block.label);
+}
+
+/**
+ * Día en el que empezó la franja que ocupa el tramo `[segmentStart, …)` del día dado:
+ * el propio día, o el anterior si es la parte de después de medianoche.
+ */
+export function occurrenceDay(block: TimeBlock, day: Date, segmentStart: number): Date {
+  const crossesMidnight = minutesOf(block.end) <= minutesOf(block.start);
+  return crossesMidnight && segmentStart === 0 && minutesOf(block.start) !== 0
+    ? addDays(day, -1)
+    : startOfDay(day);
 }
 
 /** Franjas no disponibles que se solapan con el intervalo [start, end) de un mismo día. */

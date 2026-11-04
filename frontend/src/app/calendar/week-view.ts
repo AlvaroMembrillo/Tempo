@@ -12,8 +12,9 @@ import {
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { CalendarEvent, TimeBlock } from './models';
-import { DAY_MS, blockSegments, isSameDay, startOfDay, weekDays } from './date-utils';
+import { DAY_MS, blockSegments, isSameDay, occurrenceDay, startOfDay, weekDays } from './date-utils';
 import { TimeScale, collapsibleRanges, dayAvailability, formatHours } from './availability';
+import { holidayOn, holidayTitle } from './holidays';
 
 const HOUR_PX = 48;
 const COLLAPSED_PX = 18;
@@ -49,6 +50,14 @@ interface PositionedEvent {
           >
             {{ col.day.getDate() }}
           </div>
+          @if (col.holiday; as h) {
+            <div
+              class="mx-1 mt-1 truncate rounded bg-rose-100 px-1 text-[11px] font-medium text-rose-700 dark:bg-rose-950 dark:text-rose-300"
+              [title]="holidayTitle(h)"
+            >
+              {{ h.name }}
+            </div>
+          }
           @if (showFree()) {
             <div
               class="mt-1 truncate text-[11px]"
@@ -116,7 +125,7 @@ interface PositionedEvent {
             <!-- Horas no disponibles -->
             @for (a of col.blocks; track a.key) {
               <div
-                class="pointer-events-none absolute inset-x-0 overflow-hidden border-y px-1.5 pt-0.5 text-[11px] leading-tight font-medium"
+                class="pointer-events-none absolute inset-x-0 overflow-hidden border-y px-1 pt-0.5 text-[11px] leading-tight font-medium"
                 [style.top.px]="a.top"
                 [style.height.px]="a.height"
                 [style.color]="a.color"
@@ -126,7 +135,16 @@ interface PositionedEvent {
                 "
               >
                 @if (a.height >= 18) {
-                  {{ a.label }}
+                  <button
+                    type="button"
+                    class="pointer-events-auto flex max-w-full cursor-pointer items-center gap-0.5 rounded px-1 ring-1 ring-current/40 hover:ring-current"
+                    [style.background-color]="a.color + '24'"
+                    [title]="'Opciones de «' + a.label + '» este día (p. ej. quitarla solo hoy)'"
+                    (click)="$event.stopPropagation(); blockClick.emit({ block: a.block, day: a.day })"
+                  >
+                    <span class="truncate">{{ a.label }}</span>
+                    <span aria-hidden="true" class="shrink-0">▾</span>
+                  </button>
                 }
               </div>
             }
@@ -169,6 +187,8 @@ export class WeekView {
   readonly compact = input(false);
   readonly slotClick = output<Date>();
   readonly eventClick = output<CalendarEvent>();
+  /** Clic en el nombre de una franja no disponible; `day` es el día en que empieza. */
+  readonly blockClick = output<{ block: TimeBlock; day: Date }>();
 
   protected readonly now = signal(new Date());
   protected readonly days = computed(() => weekDays(this.cursor()));
@@ -198,6 +218,7 @@ export class WeekView {
         day,
         free,
         freeLabel: formatHours(free),
+        holiday: holidayOn(day),
         items: layoutDay(this.events(), day, scale),
         blocks: blockAreas(this.blocks(), day, scale),
       };
@@ -220,6 +241,8 @@ export class WeekView {
       this.scroller().nativeElement.scrollTop = this.scale().y(7 * 60);
     });
   }
+
+  protected readonly holidayTitle = holidayTitle;
 
   protected isToday(d: Date): boolean {
     return isSameDay(d, this.now());
@@ -250,6 +273,8 @@ function blockAreas(blocks: TimeBlock[], day: Date, scale: TimeScale) {
       const top = scale.y(s);
       return {
         key: `${b.id}-${s}`,
+        block: b,
+        day: occurrenceDay(b, day, s),
         label: b.label,
         color: b.color,
         top,

@@ -2,6 +2,7 @@ import { Component, computed, input, output } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { CalendarEvent } from './models';
 import { eventsOnDay, isSameDay, monthGrid } from './date-utils';
+import { holidayOn, holidayTitle } from './holidays';
 
 const MAX_VISIBLE = 3;
 
@@ -22,7 +23,14 @@ const MAX_VISIBLE = 3;
       @for (c of cells(); track c.day.getTime()) {
         <div
           class="flex min-h-0 cursor-pointer flex-col gap-0.5 overflow-hidden border-r border-b border-gray-200 dark:border-gray-700 p-1"
-          [class]="c.inMonth ? '' : 'bg-gray-50 dark:bg-gray-950'"
+          [class]="
+            c.holiday
+              ? 'bg-rose-50 dark:bg-rose-950/40'
+              : c.inMonth
+                ? ''
+                : 'bg-gray-50 dark:bg-gray-950'
+          "
+          [class.opacity-60]="!c.inMonth"
           (click)="dayClick.emit(c.day)"
         >
           <div class="flex justify-center">
@@ -35,6 +43,15 @@ const MAX_VISIBLE = 3;
               {{ c.day.getDate() }}
             </span>
           </div>
+
+          @if (c.holiday; as h) {
+            <div
+              class="truncate px-1 text-[11px] font-medium text-rose-700 dark:text-rose-300"
+              [title]="holidayTitle(h)"
+            >
+              {{ h.name }}
+            </div>
+          }
 
           @for (e of c.visible; track e.id) {
             <button
@@ -69,6 +86,8 @@ export class MonthView {
   readonly eventClick = output<CalendarEvent>();
   readonly moreClick = output<Date>();
 
+  protected readonly holidayTitle = holidayTitle;
+
   protected readonly cells = computed(() => {
     const month = this.cursor().getMonth();
     const today = new Date();
@@ -78,6 +97,7 @@ export class MonthView {
         day,
         inMonth: day.getMonth() === month,
         isToday: isSameDay(day, today),
+        holiday: holidayOn(day),
         visible: all.slice(0, MAX_VISIBLE),
         hidden: Math.max(all.length - MAX_VISIBLE, 0),
       };

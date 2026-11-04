@@ -2,9 +2,15 @@ import { Component, inject, output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TimeBlockStore } from './time-block-store';
 import { BLOCK_COLORS, BLOCK_PRESETS, TimeBlock } from './models';
-import { blockDuration, formatDuration, minutesOf } from './date-utils';
+import { blockDuration, formatDuration, fromInputs, keepsOnHolidays, minutesOf } from './date-utils';
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const dateFormat = new Intl.DateTimeFormat('es-ES', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
 const DAY_NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
 @Component({
@@ -90,6 +96,18 @@ const DAY_NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábad
                 />
                 Activa
               </label>
+              <label
+                class="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300"
+                title="Si está desmarcado, la franja se quita automáticamente en los días festivos"
+              >
+                <input
+                  type="checkbox"
+                  class="size-4 accent-blue-600"
+                  [checked]="keepsOnHolidays(b)"
+                  (change)="store.update(b.id, { keepOnHolidays: !keepsOnHolidays(b) })"
+                />
+                En festivos
+              </label>
               <button
                 type="button"
                 class="rounded-md px-2 py-1 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
@@ -141,6 +159,47 @@ const DAY_NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábad
                 </button>
               }
             </div>
+
+            <!-- Días concretos sin esta franja -->
+            <div class="flex flex-col gap-2 text-sm">
+              @if (b.exceptions?.length) {
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span class="text-gray-500 dark:text-gray-400">Quitada el:</span>
+                  @for (d of b.exceptions; track d) {
+                    <span
+                      class="flex items-center gap-1 rounded-full bg-gray-100 py-0.5 pr-1 pl-2.5 text-xs dark:bg-gray-800"
+                    >
+                      {{ formatDate(d) }}
+                      <button
+                        type="button"
+                        class="flex size-4 items-center justify-center rounded-full text-gray-500 hover:bg-gray-300 dark:text-gray-400 dark:hover:bg-gray-600"
+                        [attr.aria-label]="'Volver a aplicar el ' + formatDate(d)"
+                        [title]="'Volver a aplicar el ' + formatDate(d)"
+                        (click)="store.restoreDay(b.id, d)"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  }
+                </div>
+              }
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-gray-500 dark:text-gray-400">Quitar un día concreto:</span>
+                <input
+                  #skipDate
+                  type="date"
+                  class="rounded-md bg-gray-100 px-2 py-1 dark:bg-gray-800"
+                  aria-label="Día en el que quitar la franja"
+                />
+                <button
+                  type="button"
+                  class="rounded-md border border-gray-300 px-2 py-1 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800"
+                  (click)="skipDate.value && store.skipDay(b.id, skipDate.value); skipDate.value = ''"
+                >
+                  Quitar
+                </button>
+              </div>
+            </div>
           </div>
         }
 
@@ -164,6 +223,12 @@ export class AvailabilityDialog {
   protected readonly presets = BLOCK_PRESETS;
   protected readonly dayLabels = DAY_LABELS;
   protected readonly dayNames = DAY_NAMES;
+
+  protected readonly keepsOnHolidays = keepsOnHolidays;
+
+  protected formatDate(date: string): string {
+    return dateFormat.format(fromInputs(date, '00:00'));
+  }
 
   protected duration(b: TimeBlock): string {
     return formatDuration(blockDuration(b));

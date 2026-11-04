@@ -41,6 +41,26 @@ export class TimeBlockStore {
     this._blocks.update((list) => list.map((b) => (b.id === id ? { ...b, ...patch } : b)));
   }
 
+  /** Quita la franja solo en una fecha concreta (`YYYY-MM-DD`). */
+  skipDay(id: string, date: string): void {
+    this._blocks.update((list) =>
+      list.map((b) =>
+        b.id === id && !b.exceptions?.includes(date)
+          ? { ...b, exceptions: [...(b.exceptions ?? []), date].sort() }
+          : b,
+      ),
+    );
+  }
+
+  /** Vuelve a aplicar la franja en una fecha que se había quitado. */
+  restoreDay(id: string, date: string): void {
+    this._blocks.update((list) =>
+      list.map((b) =>
+        b.id === id ? { ...b, exceptions: (b.exceptions ?? []).filter((d) => d !== date) } : b,
+      ),
+    );
+  }
+
   remove(id: string): void {
     this._blocks.update((list) => list.filter((b) => b.id !== id));
   }

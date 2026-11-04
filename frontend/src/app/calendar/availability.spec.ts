@@ -27,9 +27,9 @@ const event = (start: Date, end: Date): CalendarEvent => ({
   color: '#000',
 });
 
-// 2026-11-02 es lunes
-const monday = new Date(2026, 10, 2);
-const at = (h: number, m = 0) => new Date(2026, 10, 2, h, m);
+// 2026-11-09 es lunes (semana sin festivos)
+const monday = new Date(2026, 10, 9);
+const at = (h: number, m = 0) => new Date(2026, 10, 9, h, m);
 
 describe('intervalos', () => {
   it('suma uniendo solapes y resta tramos', () => {
