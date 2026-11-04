@@ -1,3 +1,18 @@
-/* You can add global styles to this file, and also import other style files */
-
 @import 'tailwindcss';
+
+/* El modo oscuro se activa con la clase .dark en <html> (ver ThemeService) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  /* Selectores de fecha/hora y scrollbars nativos en oscuro */
+  color-scheme: dark;
+}
+body {
+  background-color: var(--color-white);
+}
+html.dark body {
+  background-color: var(--color-gray-900);
+}
