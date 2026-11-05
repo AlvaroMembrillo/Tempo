@@ -7,6 +7,19 @@ export interface CalendarEvent {
   end: string;
   color: string;
   description?: string;
+  /** Proyecto al que se imputan las horas del evento. */
+  projectId?: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  client?: string;
+  color: string;
+  /** Tarifa en €/hora; sin tarifa solo se cuentan horas. */
+  hourlyRate?: number;
+  /** Los proyectos archivados no se ofrecen al crear eventos, pero conservan sus horas. */
+  archived?: boolean;
 }
 
 export type CalendarView = 'day' | 'week' | 'month';
