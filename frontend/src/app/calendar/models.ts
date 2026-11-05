@@ -6,18 +6,18 @@ export interface CalendarEvent {
   /** Fecha/hora de fin en formato ISO. */
   end: string;
   color: string;
-  description?: string;
+  description?: string | null;
   /** Proyecto al que se imputan las horas del evento. */
-  projectId?: string;
+  projectId?: string | null;
 }
 
 export interface Project {
   id: string;
   name: string;
-  client?: string;
+  client?: string | null;
   color: string;
   /** Tarifa en €/hora; sin tarifa solo se cuentan horas. */
-  hourlyRate?: number;
+  hourlyRate?: number | null;
   /** Los proyectos archivados no se ofrecen al crear eventos, pero conservan sus horas. */
   archived?: boolean;
 }
@@ -58,7 +58,7 @@ export interface TimeBlock {
    * Si es true, la franja se mantiene en los días festivos. Si no se indica,
    * solo se mantienen las franjas de sueño (ver `keepsOnHolidays`).
    */
-  keepOnHolidays?: boolean;
+  keepOnHolidays?: boolean | null;
 }
 
 export const BLOCK_COLORS = ['#6366f1', '#64748b', '#0d9488', '#d97706', '#db2777'] as const;
