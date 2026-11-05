@@ -7,6 +7,9 @@ import { EventChange, WeekView } from './week-view';
 import { MonthView } from './month-view';
 import { EventDialog } from './event-dialog';
 import { AvailabilityDialog } from './availability-dialog';
+import { ProjectsDialog, ProjectsTab } from './projects-dialog';
+import { ProjectStore } from './project-store';
+import { formatMoney, projectTotals } from './projects';
 import { TimeBlockStore } from './time-block-store';
 import { dayAvailability, formatHours, sumAvailability } from './availability';
 import { holidayOn } from './holidays';
@@ -46,7 +49,7 @@ const ICON_BTN =
 
 @Component({
   selector: 'app-calendar-page',
-  imports: [DatePipe, WeekView, MonthView, EventDialog, AvailabilityDialog, ToastHost],
+  imports: [DatePipe, WeekView, MonthView, EventDialog, AvailabilityDialog, ProjectsDialog, ToastHost],
   host: {
     class: 'flex h-dvh flex-col bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100',
     '(document:keydown)': 'onKeydown($event)',
@@ -77,6 +80,18 @@ const ICON_BTN =
       </h1>
       <div class="flex-1 sm:hidden"></div>
 
+      <button
+        type="button"
+        [class]="iconBtn + ' md:hidden'"
+        aria-label="Proyectos"
+        title="Proyectos"
+        (click)="openProjects('projects')"
+      >
+        <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="7" width="18" height="13" rx="2" />
+          <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" />
+        </svg>
+      </button>
       <button
         type="button"
         [class]="iconBtn + ' md:hidden'"
@@ -209,6 +224,59 @@ const ICON_BTN =
           </p>
         </div>
 
+        <!-- Horas por proyecto en el periodo visible -->
+        <div>
+          <div class="mb-2 flex items-center justify-between">
+            <div class="min-w-0">
+              <div class="text-sm font-medium">Proyectos</div>
+              <div class="truncate text-xs text-gray-500 first-letter:uppercase dark:text-gray-400">{{ periodLabel() }}</div>
+            </div>
+            <button
+              type="button"
+              class="rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-gray-100 dark:text-blue-400 dark:hover:bg-gray-800"
+              title="Proyectos (P)"
+              (click)="openProjects('projects')"
+            >
+              {{ projects.projects().length ? 'Gestionar' : 'Crear' }}
+            </button>
+          </div>
+          @for (t of periodTotals(); track t.project?.id ?? 'none') {
+            <div class="flex items-center gap-2 px-1 py-1 text-sm" animate.enter="event-enter">
+              <span class="size-2.5 shrink-0 rounded-full" [style.background-color]="t.project?.color ?? '#9ca3af'"></span>
+              <span class="truncate" [class.text-gray-500]="!t.project">{{ t.project?.name ?? 'Sin proyecto' }}</span>
+              <span class="ml-auto shrink-0 text-right text-xs tabular-nums">
+                {{ hours(t.minutes) }}
+                @if (t.amount != null) {
+                  <span class="block text-gray-500 dark:text-gray-400">{{ money(t.amount) }}</span>
+                }
+              </span>
+            </div>
+          } @empty {
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              @if (projects.projects().length) {
+                No hay horas en proyectos en este periodo. Elige un proyecto al crear o editar un evento.
+              } @else {
+                Crea proyectos para saber cuántas horas (y cuánto dinero) dedicas a cada uno.
+              }
+            </p>
+          }
+          @if (periodBillable() > 0) {
+            <div class="mt-1 flex justify-between border-t border-gray-200 px-1 pt-1 text-sm font-medium dark:border-gray-700">
+              <span>Total facturable</span>
+              <span class="tabular-nums">{{ money(periodBillable()) }}</span>
+            </div>
+          }
+          @if (periodTotals().length) {
+            <button
+              type="button"
+              class="mt-2 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+              (click)="openProjects('report')"
+            >
+              Ver informe y exportar →
+            </button>
+          }
+        </div>
+
         <!-- Horas no disponibles -->
         <div>
           <div class="mb-2 flex items-center justify-between">
@@ -261,6 +329,7 @@ const ICON_BTN =
             <span><kbd class="kbd">T</kbd></span><span>hoy</span>
             <span><kbd class="kbd">D</kbd> <kbd class="kbd">S</kbd> <kbd class="kbd">M</kbd></span><span>día / semana / mes</span>
             <span><kbd class="kbd">C</kbd></span><span>crear evento</span>
+            <span><kbd class="kbd">P</kbd></span><span>proyectos</span>
           </div>
           <p class="mt-2">Arrastra un evento para moverlo, o su borde inferior para cambiar la duración.
             Arrastra sobre un hueco vacío para crear un evento con esa duración.</p>
@@ -272,7 +341,7 @@ const ICON_BTN =
         @if (view() === 'month') {
           <app-month-view
             [cursor]="cursor()"
-            [events]="events()"
+            [events]="displayEvents()"
             [anim]="navAnim()"
             (dayClick)="create(atHour($event, 9))"
             (dayOpen)="openDay($event)"
@@ -282,7 +351,8 @@ const ICON_BTN =
         } @else {
           <app-week-view
             [cursor]="cursor()"
-            [events]="events()"
+            [events]="displayEvents()"
+            [projectNames]="projectNames()"
             [blocks]="blocks()"
             [compact]="timeBlocks.compact()"
             [dayCount]="view() === 'day' ? 1 : 7"
@@ -364,6 +434,17 @@ const ICON_BTN =
       />
     }
 
+    @if (projectsDialog(); as pd) {
+      <app-projects-dialog
+        animate.enter="modal-enter"
+        animate.leave="modal-leave"
+        [initialTab]="pd"
+        [rangeStart]="visibleRange().from"
+        [rangeEnd]="visibleRange().to"
+        (closed)="projectsDialog.set(null)"
+      />
+    }
+
     @if (editing(); as ed) {
       <app-event-dialog
         animate.enter="modal-enter"
@@ -400,10 +481,12 @@ export class CalendarPage {
   private readonly toasts = inject(ToastService);
   protected readonly theme = inject(ThemeService);
   protected readonly timeBlocks = inject(TimeBlockStore);
+  protected readonly projects = inject(ProjectStore);
 
   protected readonly iconBtn = ICON_BTN;
   protected readonly views = VIEWS;
   protected readonly hours = formatHours;
+  protected readonly money = formatMoney;
 
   protected readonly events = this.store.events;
   protected readonly blocks = this.timeBlocks.blocks;
@@ -412,6 +495,52 @@ export class CalendarPage {
   protected readonly miniCursor = signal(startOfDay(new Date()));
   protected readonly editing = signal<Editing | null>(null);
   protected readonly showAvailability = signal(false);
+  protected readonly projectsDialog = signal<ProjectsTab | null>(null);
+
+  /** Los eventos con proyecto se pintan con el color del proyecto. */
+  protected readonly displayEvents = computed(() => {
+    const byId = this.projects.byId();
+    return this.events().map((e) => {
+      const p = e.projectId ? byId.get(e.projectId) : undefined;
+      return p ? { ...e, color: p.color } : e;
+    });
+  });
+  protected readonly projectNames = computed(
+    () => new Map(this.projects.projects().map((p) => [p.id, p.name])),
+  );
+
+  /** Periodo que se ve en pantalla: el día, la semana o el mes (fin no incluido). */
+  protected readonly visibleRange = computed(() => {
+    const c = this.cursor();
+    switch (this.view()) {
+      case 'day':
+        return { from: startOfDay(c), to: addDays(startOfDay(c), 1) };
+      case 'week':
+        return { from: startOfWeek(c), to: addDays(startOfWeek(c), 7) };
+      default:
+        return { from: startOfMonth(c), to: addMonths(startOfMonth(c), 1) };
+    }
+  });
+  protected readonly periodLabel = computed(() => {
+    const { from } = this.visibleRange();
+    const today = new Date();
+    switch (this.view()) {
+      case 'day':
+        return isSameDay(from, today) ? 'hoy' : shortDay.format(from);
+      case 'week':
+        return isSameDay(from, startOfWeek(today)) ? 'esta semana' : 'semana del ' + shortDay.format(from);
+      default:
+        return monthYear.format(from);
+    }
+  });
+  protected readonly periodTotals = computed(() => {
+    const { from, to } = this.visibleRange();
+    // Solo proyectos: los eventos sin proyecto no aportan nada aquí
+    return projectTotals(this.events(), this.projects.projects(), from, to).filter((t) => t.project);
+  });
+  protected readonly periodBillable = computed(() =>
+    this.periodTotals().reduce((sum, t) => sum + (t.amount ?? 0), 0),
+  );
   protected readonly blockAction = signal<{ block: TimeBlock; day: Date } | null>(null);
   /** Animación con la que entra la vista: depende de si vamos hacia delante o hacia atrás. */
   protected readonly navAnim = signal('view-fade');
@@ -553,7 +682,7 @@ export class CalendarPage {
     if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.defaultPrevented) return;
     const target = ev.target as HTMLElement | null;
     if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
-    if (this.editing() || this.showAvailability() || this.blockAction()) return;
+    if (this.editing() || this.showAvailability() || this.blockAction() || this.projectsDialog()) return;
 
     const actions: Record<string, () => void> = {
       ArrowLeft: () => this.move(-1),
@@ -564,6 +693,7 @@ export class CalendarPage {
       w: () => this.setView('week'),
       m: () => this.setView('month'),
       c: () => this.createNow(),
+      p: () => this.openProjects('projects'),
     };
     const action = actions[ev.key] ?? actions[ev.key.toLowerCase()];
     if (action) {
@@ -601,8 +731,17 @@ export class CalendarPage {
     });
   }
 
+  protected openProjects(tab: ProjectsTab): void {
+    this.projectsDialog.set(tab);
+  }
+
+  /** El evento tal como está guardado (los que se pintan llevan el color del proyecto). */
+  private original(event: CalendarEvent): CalendarEvent {
+    return this.events().find((e) => e.id === event.id) ?? event;
+  }
+
   protected edit(event: CalendarEvent): void {
-    this.editing.set({ event, isNew: false });
+    this.editing.set({ event: this.original(event), isNew: false });
   }
 
   protected save(event: CalendarEvent, isNew: boolean): void {
@@ -626,7 +765,8 @@ export class CalendarPage {
   }
 
   /** Evento movido o redimensionado arrastrando. */
-  protected moveEvent({ event, start, end }: EventChange): void {
+  protected moveEvent({ event: shown, start, end }: EventChange): void {
+    const event = this.original(shown);
     this.store.save({ ...event, start: start.toISOString(), end: end.toISOString() });
     this.toasts.undoable(
       `«${event.title || 'Sin título'}»: ${shortDay.format(start)}, ${hourMin.format(start)}–${hourMin.format(end)}`,

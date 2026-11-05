@@ -253,7 +253,8 @@ interface Preview {
                   ', de ' +
                   (it.event.start | date: 'HH:mm') +
                   ' a ' +
-                  (it.event.end | date: 'HH:mm')
+                  (it.event.end | date: 'HH:mm') +
+                  (projectName(it.event) ? ', proyecto ' + projectName(it.event) : '')
                 "
                 animate.enter="event-enter"
                 (pointerdown)="onEventPointerDown($event, it.event, ci, 'move')"
@@ -269,6 +270,9 @@ interface Preview {
                   <div class="truncate opacity-90">
                     {{ it.event.start | date: 'HH:mm' }} – {{ it.event.end | date: 'HH:mm' }}
                   </div>
+                  @if (it.height >= 56 && projectName(it.event); as pn) {
+                    <div class="mt-0.5 truncate text-[11px] opacity-80">{{ pn }}</div>
+                  }
                 }
                 <!-- Asa para cambiar la duración -->
                 <span
@@ -301,6 +305,8 @@ export class WeekView {
   readonly compact = input(false);
   /** 1 = vista día, 7 = vista semana. */
   readonly dayCount = input<1 | 7>(7);
+  /** Nombre de cada proyecto por id, para mostrarlo en las tarjetas. */
+  readonly projectNames = input<ReadonlyMap<string, string>>(new Map());
   /** Clase de animación de entrada para las columnas (cambio de semana/día). */
   readonly anim = input('view-fade');
 
@@ -400,6 +406,10 @@ export class WeekView {
       const minute = showsToday ? now.getHours() * 60 + now.getMinutes() - 90 : 7 * 60 - 30;
       this.scroller().nativeElement.scrollTop = Math.max(this.scale().y(Math.max(minute, 0)), 0);
     });
+  }
+
+  protected projectName(e: CalendarEvent): string {
+    return e.projectId ? (this.projectNames().get(e.projectId) ?? '') : '';
   }
 
   protected isToday(d: Date): boolean {

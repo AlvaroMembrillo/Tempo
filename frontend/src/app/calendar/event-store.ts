@@ -30,6 +30,17 @@ export class EventStore {
     );
   }
 
+  /** Quita el proyecto de todos sus eventos (al borrar el proyecto). Devuelve los afectados. */
+  unassignProject(projectId: string): CalendarEvent[] {
+    const affected = this._events().filter((e) => e.projectId === projectId);
+    if (affected.length) {
+      this._events.update((list) =>
+        list.map((e) => (e.projectId === projectId ? { ...e, projectId: undefined } : e)),
+      );
+    }
+    return affected;
+  }
+
   remove(id: string): void {
     this._events.update((list) => list.filter((e) => e.id !== id));
   }
