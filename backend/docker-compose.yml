@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: tempo
+      POSTGRES_PASSWORD: tempo
+      POSTGRES_DB: tempo
+    ports:
+      # 5433 en el host: el 5432 suele estar ocupado por un PostgreSQL local
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Crea también la base de datos de los tests
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tempo -d tempo"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    environment:
+      TEMPO_DATABASE_URL: postgresql+psycopg://tempo:tempo@db:5432/tempo
+      TEMPO_SECRET_KEY: ${TEMPO_SECRET_KEY:-solo-para-desarrollo-cambiala-en-produccion}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
