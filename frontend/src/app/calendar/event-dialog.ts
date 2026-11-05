@@ -1,27 +1,52 @@
-import { Component, OnInit, input, output } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  afterNextRender,
+  input,
+  output,
+  viewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CalendarEvent, EVENT_COLORS, TimeBlock } from './models';
-import { fromInputs, overlappingBlocks, toDateInput, toTimeInput } from './date-utils';
+import {
+  formatDuration,
+  fromInputs,
+  minutesOf,
+  overlappingBlocks,
+  toDateInput,
+  toTimeInput,
+} from './date-utils';
 
 @Component({
   selector: 'app-event-dialog',
   imports: [FormsModule],
-  host: { '(document:keydown.escape)': 'closed.emit()' },
+  host: {
+    class: 'fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-4 dark:bg-black/60',
+    '(click)': 'closed.emit()',
+    '(document:keydown.escape)': 'closed.emit()',
+    // Guardar con Ctrl/⌘ + Intro desde cualquier campo
+    '(keydown.control.enter)': 'submit()',
+    '(keydown.meta.enter)': 'submit()',
+  },
   template: `
-    <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 dark:bg-black/60 p-4"
-      (click)="closed.emit()"
-    >
       <form
-        class="flex w-full max-w-md flex-col gap-4 rounded-xl bg-white dark:bg-gray-900 p-6 shadow-xl"
+        class="modal-panel flex max-h-[92dvh] w-full max-w-md flex-col gap-4 overflow-y-auto rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-xl dark:bg-gray-900"
+        role="dialog"
+        aria-modal="true"
+        [attr.aria-label]="isNew() ? 'Nuevo evento' : 'Editar evento'"
         (click)="$event.stopPropagation()"
         (ngSubmit)="submit()"
       >
+        <span class="text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
+          {{ isNew() ? 'Nuevo evento' : 'Editar evento' }}
+        </span>
         <input
+          #titleInput
           name="title"
           [(ngModel)]="form.title"
           placeholder="Añade un título"
-          autofocus
+          aria-label="Título"
           class="border-b-2 border-gray-200 dark:border-gray-700 pb-1 text-xl outline-none focus:border-blue-600"
         />
 
@@ -30,6 +55,7 @@ import { fromInputs, overlappingBlocks, toDateInput, toTimeInput } from './date-
             type="date"
             name="date"
             required
+            aria-label="Fecha"
             [(ngModel)]="form.date"
             class="rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-1.5"
           />
@@ -38,7 +64,9 @@ import { fromInputs, overlappingBlocks, toDateInput, toTimeInput } from './date-
             name="startTime"
             required
             step="900"
-            [(ngModel)]="form.startTime"
+            aria-label="Hora de inicio"
+            [ngModel]="form.startTime"
+            (ngModelChange)="onStartChange($event)"
             class="rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-1.5"
           />
           <span class="text-gray-500 dark:text-gray-400">–</span>
@@ -47,17 +75,23 @@ import { fromInputs, overlappingBlocks, toDateInput, toTimeInput } from './date-
             name="endTime"
             required
             step="900"
+            aria-label="Hora de fin"
             [(ngModel)]="form.endTime"
             class="rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-1.5"
           />
+          @if (durationLabel(); as d) {
+            <span class="text-gray-500 dark:text-gray-400">· {{ d }}</span>
+          }
         </div>
 
         <div class="flex gap-2">
           @for (c of colors; track c.value) {
             <button
               type="button"
-              class="size-6 rounded-full ring-offset-2 dark:ring-offset-gray-900"
+              class="size-7 rounded-full ring-offset-2 transition-transform hover:scale-110 dark:ring-offset-gray-900"
               [class.ring-2]="form.color === c.value"
+              [class.scale-110]="form.color === c.value"
+              [attr.aria-pressed]="form.color === c.value"
               [style.background-color]="c.value"
               [style.--tw-ring-color]="c.value"
               [attr.aria-label]="c.label"
@@ -109,13 +143,13 @@ import { fromInputs, overlappingBlocks, toDateInput, toTimeInput } from './date-
           </button>
           <button
             type="submit"
-            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+            title="Guardar (Ctrl/⌘ + Intro)"
           >
             Guardar
           </button>
         </div>
       </form>
-    </div>
   `,
 })
 export class EventDialog implements OnInit {
@@ -137,6 +171,15 @@ export class EventDialog implements OnInit {
     description: '',
   };
 
+  private readonly titleInput = viewChild.required<ElementRef<HTMLInputElement>>('titleInput');
+
+  constructor() {
+    // En un evento nuevo, el cursor va directo al título
+    afterNextRender(() => {
+      if (this.isNew()) this.titleInput().nativeElement.focus();
+    });
+  }
+
   ngOnInit(): void {
     const e = this.event();
     const start = new Date(e.start);
@@ -149,6 +192,25 @@ export class EventDialog implements OnInit {
       color: e.color,
       description: e.description ?? '',
     };
+  }
+
+  /** Al cambiar la hora de inicio se mantiene la duración (como en cualquier agenda). */
+  protected onStartChange(value: string): void {
+    const prev = this.form.startTime;
+    this.form.startTime = value;
+    if (!value || !prev || !this.form.endTime) return;
+    const duration = minutesOf(this.form.endTime) - minutesOf(prev);
+    if (duration <= 0) return;
+    const end = Math.min(minutesOf(value) + duration, 23 * 60 + 59);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    this.form.endTime = `${pad(Math.floor(end / 60))}:${pad(end % 60)}`;
+  }
+
+  protected durationLabel(): string {
+    const { startTime, endTime } = this.form;
+    if (!startTime || !endTime) return '';
+    const d = minutesOf(endTime) - minutesOf(startTime);
+    return d > 0 ? formatDuration(d) : '';
   }
 
   /** Nombres de las franjas no disponibles con las que se solapa el evento. */

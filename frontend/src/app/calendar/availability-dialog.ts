@@ -16,15 +16,16 @@ const DAY_NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábad
 @Component({
   selector: 'app-availability-dialog',
   imports: [FormsModule],
-  host: { '(document:keydown.escape)': 'closed.emit()' },
+  host: {
+    class: 'fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-4 dark:bg-black/60',
+    '(click)': 'closed.emit()',
+    '(document:keydown.escape)': 'closed.emit()',
+  },
   template: `
-    <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 dark:bg-black/60"
-      (click)="closed.emit()"
-    >
       <div
-        class="flex max-h-full w-full max-w-xl flex-col gap-4 overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900"
+        class="modal-panel flex max-h-[92dvh] w-full max-w-xl flex-col gap-4 overflow-y-auto rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-xl dark:bg-gray-900"
         role="dialog"
+        aria-modal="true"
         aria-labelledby="availability-title"
         (click)="$event.stopPropagation()"
       >
@@ -213,7 +214,6 @@ const DAY_NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábad
           </button>
         </div>
       </div>
-    </div>
   `,
 })
 export class AvailabilityDialog {
