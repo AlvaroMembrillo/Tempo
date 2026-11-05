@@ -1,4 +1,4 @@
-import { HOLIDAYS, holidayOn } from './holidays';
+import { holidayOn, setHolidays } from './holidays';
 import { blockSegments, keepsOnHolidays } from './date-utils';
 import { TimeBlock } from './models';
 
@@ -17,11 +17,14 @@ describe('festivos', () => {
   const corpus2026 = new Date(2026, 5, 4); // jueves 4 de junio de 2026
   const dayAfter = new Date(2026, 5, 5);
 
-  it('no hay fechas repetidas y todas son válidas', () => {
-    const dates = HOLIDAYS.map((h) => h.date);
-    expect(new Set(dates).size).toBe(dates.length);
-    for (const d of dates) expect(Number.isNaN(new Date(d).getTime())).toBe(false);
-  });
+  // Vienen del backend; aquí se cargan a mano
+  beforeEach(() =>
+    setHolidays([
+      { date: '2026-06-04', name: 'Corpus Christi', scope: 'Sevilla', note: null },
+      { date: '2026-12-08', name: 'Inmaculada Concepción', scope: 'España', note: null },
+    ]),
+  );
+  afterEach(() => setHolidays([]));
 
   it('reconoce los festivos de Sevilla', () => {
     expect(holidayOn(corpus2026)?.name).toBe('Corpus Christi');

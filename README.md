@@ -22,3 +22,10 @@ cd frontend
 pnpm install
 pnpm start                         # http://localhost:4200
 ```
+
+El frontend necesita el backend arrancado: los datos se guardan en tu cuenta. La
+dirección de la API está en `frontend/src/app/core/api.ts` (`http://localhost:8000`).
+
+Si antes usabas Tempo sin cuenta, lo que tenías guardado en el navegador se sube
+solo a tu cuenta la primera vez que inicias sesión (y queda una copia en
+`localStorage`, en la clave `tempo.copia-antes-de-subir`).

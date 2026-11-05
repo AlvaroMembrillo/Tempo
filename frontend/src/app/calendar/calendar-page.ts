@@ -2,7 +2,10 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { EventStore } from './event-store';
 import { ThemeService } from '../theme';
-import { ToastHost, ToastService } from '../ui/toast';
+import { ToastService } from '../ui/toast';
+import { AuthService } from '../core/auth';
+import { Session } from '../core/session';
+import { SyncQueue } from '../core/sync-queue';
 import { EventChange, WeekView } from './week-view';
 import { MonthView } from './month-view';
 import { EventDialog } from './event-dialog';
@@ -49,7 +52,7 @@ const ICON_BTN =
 
 @Component({
   selector: 'app-calendar-page',
-  imports: [DatePipe, WeekView, MonthView, EventDialog, AvailabilityDialog, ProjectsDialog, ToastHost],
+  imports: [DatePipe, WeekView, MonthView, EventDialog, AvailabilityDialog, ProjectsDialog],
   host: {
     class: 'flex h-dvh flex-col bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100',
     '(document:keydown)': 'onKeydown($event)',
@@ -83,33 +86,20 @@ const ICON_BTN =
       </h1>
       <div class="flex-1 sm:hidden"></div>
 
+      @if (sync.saving()) {
+        <span
+          class="hidden shrink-0 items-center gap-1.5 text-xs text-gray-500 sm:flex dark:text-gray-400"
+          animate.enter="view-fade"
+          animate.leave="toast-leave"
+          role="status"
+        >
+          <span class="size-3 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></span>
+          Guardando…
+        </span>
+      }
       <button
         type="button"
-        [class]="iconBtn + ' md:hidden'"
-        aria-label="Proyectos"
-        title="Proyectos"
-        (click)="openProjects('projects')"
-      >
-        <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="7" width="18" height="13" rx="2" />
-          <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        [class]="iconBtn + ' md:hidden'"
-        aria-label="Horas no disponibles"
-        title="Horas no disponibles"
-        (click)="showAvailability.set(true)"
-      >
-        <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M12 7v5l3 2" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        [class]="iconBtn"
+        [class]="iconBtn + ' max-sm:hidden'"
         [attr.aria-label]="theme.theme() === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
         [title]="theme.theme() === 'dark' ? 'Modo claro' : 'Modo oscuro'"
         (click)="theme.toggle()"
@@ -150,6 +140,72 @@ const ICON_BTN =
             <span class="sm:hidden">{{ v.short }}</span>
             <span class="hidden sm:inline">{{ v.label }}</span>
           </button>
+        }
+      </div>
+
+      <!-- Cuenta -->
+      <div class="relative shrink-0">
+        <button
+          type="button"
+          class="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-semibold text-white hover:ring-4 hover:ring-blue-500/25"
+          aria-haspopup="menu"
+          [attr.aria-expanded]="menuOpen()"
+          [attr.aria-label]="'Tu cuenta: ' + (auth.user()?.email ?? '')"
+          [title]="auth.user()?.email ?? ''"
+          (click)="menuOpen.set(!menuOpen())"
+        >
+          {{ initial() }}
+        </button>
+        @if (menuOpen()) {
+          <div class="fixed inset-0 z-40" (click)="menuOpen.set(false)"></div>
+          <div
+            role="menu"
+            class="absolute top-11 right-0 z-50 w-64 origin-top-right rounded-xl bg-white p-1.5 shadow-xl ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700"
+            animate.enter="toast-enter"
+            animate.leave="toast-leave"
+            (document:keydown.escape)="menuOpen.set(false)"
+          >
+            <div class="px-3 py-2">
+              @if (auth.user()?.name; as name) {
+                <div class="truncate font-medium">{{ name }}</div>
+              }
+              <div class="truncate text-sm text-gray-500 dark:text-gray-400">{{ auth.user()?.email }}</div>
+            </div>
+            <div class="my-1 border-t border-gray-200 dark:border-gray-700"></div>
+            <!-- En escritorio estas dos opciones ya están en el lateral -->
+            <button
+              type="button"
+              role="menuitem"
+              class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-100 md:hidden dark:hover:bg-gray-700"
+              (click)="menuOpen.set(false); openProjects('projects')"
+            >
+              Proyectos
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-100 md:hidden dark:hover:bg-gray-700"
+              (click)="menuOpen.set(false); showAvailability.set(true)"
+            >
+              Horas no disponibles
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+              (click)="theme.toggle()"
+            >
+              {{ theme.theme() === 'dark' ? 'Modo claro' : 'Modo oscuro' }}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/50"
+              (click)="logout()"
+            >
+              Cerrar sesión
+            </button>
+          </div>
         }
       </div>
     </header>
@@ -341,7 +397,24 @@ const ICON_BTN =
 
       <!-- Vista principal -->
       <main class="min-h-0 min-w-0 flex-1">
-        @if (view() === 'month') {
+        @if (session.status() === 'error') {
+          <div class="flex h-full flex-col items-center justify-center gap-3 p-6 text-center" animate.enter="view-fade">
+            <p class="font-medium">No se pudieron cargar tus datos</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ session.error() }}</p>
+            <button
+              type="button"
+              class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              (click)="session.retry()"
+            >
+              Reintentar
+            </button>
+          </div>
+        } @else if (session.status() !== 'ready') {
+          <div class="flex h-full items-center justify-center gap-3 text-sm text-gray-500 dark:text-gray-400" role="status">
+            <span class="size-5 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></span>
+            Cargando tus datos…
+          </div>
+        } @else if (view() === 'month') {
           <app-month-view
             [cursor]="cursor()"
             [events]="displayEvents()"
@@ -461,7 +534,6 @@ const ICON_BTN =
       />
     }
 
-    <app-toasts />
   `,
   styles: `
     .kbd {
@@ -482,6 +554,13 @@ const ICON_BTN =
 export class CalendarPage {
   private readonly store = inject(EventStore);
   private readonly toasts = inject(ToastService);
+  protected readonly auth = inject(AuthService);
+  protected readonly session = inject(Session);
+  protected readonly sync = inject(SyncQueue);
+  protected readonly menuOpen = signal(false);
+  protected readonly initial = computed(() =>
+    (this.auth.user()?.name || this.auth.user()?.email || '?').charAt(0).toUpperCase(),
+  );
   protected readonly theme = inject(ThemeService);
   protected readonly timeBlocks = inject(TimeBlockStore);
   protected readonly projects = inject(ProjectStore);
@@ -551,6 +630,9 @@ export class CalendarPage {
   protected readonly viewIndex = computed(() => VIEWS.findIndex((v) => v.id === this.view()));
 
   constructor() {
+    // Sube lo que hubiera en el navegador y carga los datos de la cuenta
+    void this.session.start();
+
     // Recordar la última vista elegida
     effect(() => {
       try {
@@ -686,6 +768,7 @@ export class CalendarPage {
     const target = ev.target as HTMLElement | null;
     if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
     if (this.editing() || this.showAvailability() || this.blockAction() || this.projectsDialog()) return;
+    if (this.menuOpen() || this.session.status() !== 'ready') return;
 
     const actions: Record<string, () => void> = {
       ArrowLeft: () => this.move(-1),
@@ -732,6 +815,13 @@ export class CalendarPage {
         color: EVENT_COLORS[0].value,
       },
     });
+  }
+
+  /** Antes de salir se envían los cambios que queden pendientes. */
+  protected async logout(): Promise<void> {
+    this.menuOpen.set(false);
+    await this.sync.flushAll();
+    this.auth.logout();
   }
 
   protected openProjects(tab: ProjectsTab): void {
