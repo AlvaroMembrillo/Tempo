@@ -3,12 +3,15 @@ import {
   ElementRef,
   OnInit,
   afterNextRender,
+  computed,
+  inject,
   input,
   output,
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CalendarEvent, EVENT_COLORS, TimeBlock } from './models';
+import { ProjectStore } from './project-store';
 import {
   formatDuration,
   fromInputs,
@@ -84,6 +87,57 @@ import {
           }
         </div>
 
+        <!-- Proyecto -->
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+          <label for="event-project" class="text-gray-500 dark:text-gray-400">Proyecto</label>
+          @if (!creatingProject) {
+            <select
+              id="event-project"
+              name="projectId"
+              class="min-w-0 flex-1 rounded-md bg-gray-100 px-2 py-1.5 dark:bg-gray-800"
+              [ngModel]="form.projectId"
+              (ngModelChange)="onProjectChange($event)"
+            >
+              <option value="">Sin proyecto</option>
+              @for (p of projectOptions(); track p.id) {
+                <option [value]="p.id">{{ p.name }}{{ p.client ? ' · ' + p.client : '' }}</option>
+              }
+              <option value="__new">+ Nuevo proyecto…</option>
+            </select>
+          } @else {
+            <input
+              #newProjectInput
+              name="newProjectName"
+              class="min-w-0 flex-1 rounded-md bg-gray-100 px-2 py-1.5 outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-800"
+              placeholder="Nombre del proyecto"
+              aria-label="Nombre del nuevo proyecto"
+              [(ngModel)]="newProjectName"
+              (keydown.enter)="$event.preventDefault(); createProject()"
+              (keydown.escape)="$event.stopPropagation(); creatingProject = false"
+            />
+            <button
+              type="button"
+              class="rounded-md bg-blue-600 px-3 py-1.5 font-medium text-white hover:bg-blue-700"
+              (click)="createProject()"
+            >
+              Crear
+            </button>
+            <button
+              type="button"
+              class="rounded-md px-2 py-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+              (click)="creatingProject = false"
+            >
+              Cancelar
+            </button>
+          }
+        </div>
+
+        @if (selectedProject(); as p) {
+          <p class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <span class="size-3 rounded-full" [style.background-color]="p.color"></span>
+            Usa el color del proyecto{{ p.hourlyRate != null ? ' · ' + p.hourlyRate + ' €/h' : '' }}
+          </p>
+        } @else {
         <div class="flex gap-2">
           @for (c of colors; track c.value) {
             <button
@@ -100,6 +154,7 @@ import {
             ></button>
           }
         </div>
+        }
 
         <textarea
           name="description"
@@ -161,6 +216,37 @@ export class EventDialog implements OnInit {
   readonly closed = output<void>();
 
   protected readonly colors = EVENT_COLORS;
+  private readonly projects = inject(ProjectStore);
+  protected creatingProject = false;
+  protected newProjectName = '';
+  private readonly newProjectInput = viewChild<ElementRef<HTMLInputElement>>('newProjectInput');
+
+  /** Proyectos activos, más el del evento aunque esté archivado (para no perderlo al editar). */
+  protected readonly projectOptions = computed(() => {
+    const current = this.event().projectId;
+    return this.projects.projects().filter((p) => !p.archived || p.id === current);
+  });
+
+  protected selectedProject() {
+    return this.form.projectId ? this.projects.byId().get(this.form.projectId) : undefined;
+  }
+
+  protected onProjectChange(value: string): void {
+    if (value === '__new') {
+      this.creatingProject = true;
+      setTimeout(() => this.newProjectInput()?.nativeElement.focus());
+      return;
+    }
+    this.form.projectId = value;
+  }
+
+  protected createProject(): void {
+    const name = this.newProjectName.trim();
+    if (!name) return;
+    this.form.projectId = this.projects.add({ name }).id;
+    this.newProjectName = '';
+    this.creatingProject = false;
+  }
   protected error = '';
   protected form = {
     title: '',
@@ -169,6 +255,7 @@ export class EventDialog implements OnInit {
     endTime: '',
     color: '',
     description: '',
+    projectId: '',
   };
 
   private readonly titleInput = viewChild.required<ElementRef<HTMLInputElement>>('titleInput');
@@ -191,6 +278,7 @@ export class EventDialog implements OnInit {
       endTime: toTimeInput(end),
       color: e.color,
       description: e.description ?? '',
+      projectId: e.projectId ?? '',
     };
   }
 
@@ -224,7 +312,7 @@ export class EventDialog implements OnInit {
   }
 
   protected submit(): void {
-    const { title, date, startTime, endTime, color, description } = this.form;
+    const { title, date, startTime, endTime, color, description, projectId } = this.form;
     if (!date || !startTime || !endTime) {
       this.error = 'Indica fecha, hora de inicio y hora de fin.';
       return;
@@ -241,6 +329,7 @@ export class EventDialog implements OnInit {
       start: start.toISOString(),
       end: end.toISOString(),
       color,
+      projectId: projectId || undefined,
       description: description.trim() || undefined,
     });
   }
