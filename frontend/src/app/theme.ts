@@ -25,8 +25,19 @@ export class ThemeService {
     });
   }
 
+  /** Cambia de tema con un fundido suave (View Transitions) donde el navegador lo soporte. */
   toggle(): void {
-    this.theme.update((t) => (t === 'dark' ? 'light' : 'dark'));
+    const next: Theme = this.theme() === 'dark' ? 'light' : 'dark';
+    const apply = () => {
+      document.documentElement.classList.toggle('dark', next === 'dark');
+      this.theme.set(next);
+    };
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduceMotion && 'startViewTransition' in document) {
+      document.startViewTransition(apply);
+    } else {
+      apply();
+    }
   }
 }
 
