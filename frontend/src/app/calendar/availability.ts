@@ -177,6 +177,18 @@ export class TimeScale {
     return r.start + ((px - r.top) / r.height) * (r.end - r.start);
   }
 
+  /** Como `minuteAt`, pero nunca devuelve `null`: útil al arrastrar. */
+  minuteAtLoose(px: number): number {
+    const clamped = Math.min(Math.max(px, 0), this.height - 0.001);
+    const r = this.rows.find((row) => clamped >= row.top && clamped < row.top + row.height) ?? this.rows.at(-1)!;
+    return r.start + ((clamped - r.top) / r.height) * (r.end - r.start);
+  }
+
+  /** ¿Es el minuto el borde de un tramo comprimido? */
+  isCollapsedEdge(minute: number): boolean {
+    return this.rows.some((r) => r.collapsed && (minute === r.start || minute === r.end));
+  }
+
   /** ¿Está el minuto dentro (sin contar bordes) de un tramo comprimido? */
   isHidden(minute: number): boolean {
     return this.rows.some((r) => r.collapsed && minute > r.start && minute < r.end);

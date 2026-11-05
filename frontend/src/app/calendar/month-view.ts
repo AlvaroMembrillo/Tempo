@@ -22,7 +22,9 @@ const MAX_VISIBLE = 3;
     <div class="grid min-h-0 flex-1 grid-cols-7 grid-rows-6">
       @for (c of cells(); track c.day.getTime()) {
         <div
-          class="flex min-h-0 cursor-pointer flex-col gap-0.5 overflow-hidden border-r border-b border-gray-200 dark:border-gray-700 p-1"
+          class="flex min-h-0 cursor-pointer flex-col gap-0.5 overflow-hidden border-r border-b border-gray-200 p-1 transition-colors hover:bg-blue-50/50 dark:border-gray-700 dark:hover:bg-blue-950/20"
+          [animate.enter]="anim()"
+          title="Clic para crear un evento este día"
           [class]="
             c.holiday
               ? 'bg-rose-50 dark:bg-rose-950/40'
@@ -34,14 +36,20 @@ const MAX_VISIBLE = 3;
           (click)="dayClick.emit(c.day)"
         >
           <div class="flex justify-center">
-            <span
+            <button
+              type="button"
               class="flex size-6 items-center justify-center rounded-full text-xs"
               [class]="
-                c.isToday ? 'bg-blue-600 text-white' : c.inMonth ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'
+                c.isToday
+                  ? 'bg-blue-600 text-white'
+                  : (c.inMonth ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500') +
+                    ' hover:bg-gray-200 dark:hover:bg-gray-700'
               "
+              [title]="'Ver el día ' + c.day.getDate()"
+              (click)="$event.stopPropagation(); dayOpen.emit(c.day)"
             >
               {{ c.day.getDate() }}
-            </span>
+            </button>
           </div>
 
           @if (c.holiday; as h) {
@@ -60,7 +68,7 @@ const MAX_VISIBLE = 3;
               (click)="$event.stopPropagation(); eventClick.emit(e)"
             >
               <span class="size-2 shrink-0 rounded-full" [style.background-color]="e.color"></span>
-              <span class="text-gray-500 dark:text-gray-400">{{ e.start | date: 'HH:mm' }}</span>
+              <span class="hidden text-gray-500 sm:inline dark:text-gray-400">{{ e.start | date: 'HH:mm' }}</span>
               <span class="truncate text-gray-800 dark:text-gray-200">{{ e.title || '(Sin título)' }}</span>
             </button>
           }
@@ -85,6 +93,9 @@ export class MonthView {
   readonly dayClick = output<Date>();
   readonly eventClick = output<CalendarEvent>();
   readonly moreClick = output<Date>();
+  readonly dayOpen = output<Date>();
+  /** Clase de animación de entrada para las casillas (cambio de mes). */
+  readonly anim = input('view-fade');
 
   protected readonly holidayTitle = holidayTitle;
 

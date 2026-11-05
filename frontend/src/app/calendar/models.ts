@@ -9,7 +9,7 @@ export interface CalendarEvent {
   description?: string;
 }
 
-export type CalendarView = 'week' | 'month';
+export type CalendarView = 'day' | 'week' | 'month';
 
 export const EVENT_COLORS = [
   { value: '#2563eb', label: 'Azul' },
