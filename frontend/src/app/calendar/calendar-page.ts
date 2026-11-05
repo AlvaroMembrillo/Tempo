@@ -59,7 +59,10 @@ const ICON_BTN =
     <header
       class="flex flex-wrap items-center gap-1 border-b border-gray-200 px-2 py-2 sm:flex-nowrap sm:gap-3 sm:px-4 dark:border-gray-700"
     >
-      <span class="mr-1 hidden text-xl font-semibold text-blue-600 sm:inline dark:text-blue-400">Tempo</span>
+      <span class="mr-1 hidden items-center gap-2 text-xl font-semibold text-blue-600 sm:flex dark:text-blue-400">
+        <img src="favicon.svg" alt="" class="size-8" />
+        Tempo
+      </span>
       <button
         type="button"
         class="shrink-0 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800"
